@@ -17,6 +17,7 @@ class Settings(BaseSettings):
     
     CORS_ORIGINS: List[str] = [] # Stricter typing for CORS configuration
     
+    AWS_REGION: Optional[str] = None
     AWS_KMS_KEY_ID: Optional[str] = None
     BVN_HASH_PEPPER: SecretStr = Field(...)
     
@@ -25,6 +26,9 @@ class Settings(BaseSettings):
 
     SMS_HMAC_SECRET: SecretStr = Field(...)
     LOCAL_DEK: Optional[SecretStr] = None
+
+    # Google Play Integrity API
+    GOOGLE_PLAY_INTEGRITY_API_KEY: Optional[SecretStr] = None
     
     model_config = SettingsConfigDict(
         env_file=".env",
@@ -45,6 +49,8 @@ class Settings(BaseSettings):
         if self.ENVIRONMENT == "production":
             if not self.AWS_KMS_KEY_ID:
                 raise ValueError("AWS_KMS_KEY_ID is strictly required in production.")
+            if not self.GOOGLE_PLAY_INTEGRITY_API_KEY:
+                raise ValueError("GOOGLE_PLAY_INTEGRITY_API_KEY is strictly required in production.")
             if not self.CORS_ORIGINS:
                 self.CORS_ORIGINS = ["https://admin.veriphy.ng"]
         elif self.ENVIRONMENT == "staging":
