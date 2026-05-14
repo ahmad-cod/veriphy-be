@@ -29,7 +29,7 @@ class SquadAPIClient:
             )
         return self._client
 
-    async def verify_transaction(self, amount: float, virtual_account: str, retries: int = 3) -> Optional[Dict[str, Any]]:
+    async def verify_transaction(self, amount: int, virtual_account: str, retries: int = 3) -> Optional[Dict[str, Any]]:
         """
         Verify if a transaction with the given amount exists for the virtual account.
 
