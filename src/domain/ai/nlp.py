@@ -42,7 +42,8 @@ class NLPExtractor:
         sms_body = sms_body.strip()
 
         # Method 1: Use spaCy for entity recognition (if model loaded)
-        if NLPExtractor._model and NLPExtractor._model != "REGEX_ONLY":
+        # if NLPExtractor._model and NLPExtractor._model != "REGEX_ONLY":
+        if NLPExtractor._model and not isinstance(NLPExtractor._model, str):
             try:
                 doc = NLPExtractor._model(sms_body)
 
