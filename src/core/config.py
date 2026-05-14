@@ -22,6 +22,9 @@ class Settings(BaseSettings):
     
     SQUAD_API_URL: str = "https://sandbox-api-d.squadco.com"
     SQUAD_SECRET_KEY: SecretStr = Field(...)
+
+    SMS_HMAC_SECRET: SecretStr = Field(...)
+    LOCAL_DEK: Optional[SecretStr] = None
     
     model_config = SettingsConfigDict(
         env_file=".env",
@@ -50,6 +53,8 @@ class Settings(BaseSettings):
         elif self.ENVIRONMENT == "local":
             if not self.CORS_ORIGINS:
                 self.CORS_ORIGINS = ["*"]
+            if not self.LOCAL_DEK:
+                raise ValueError("LOCAL_DEK is required in local environment to support deterministic PII encryption.")
         return self
 
 settings = Settings()
