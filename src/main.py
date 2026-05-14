@@ -1,24 +1,22 @@
-import uuid
 from contextlib import asynccontextmanager
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.middleware.trustedhost import TrustedHostMiddleware
-from asgi_correlation_id import CorrelationIdMiddleware # Use a stable package
+from asgi_correlation_id import CorrelationIdMiddleware
 import structlog
 from sqlalchemy import text
-from sqlalchemy.ext.asyncio import create_async_engine
 
 from src.core.config import settings
 from src.core.exceptions import (
-    VeriphyException, 
-    veriphy_exception_handler, 
-    global_exception_handler
+    VeriphyException,
+    veriphy_exception_handler,
+    global_exception_handler,
 )
+from src.infrastructure.database import engine
+from src.infrastructure.redis import init_redis, close_redis
+from src.api.v1.routers import merchant_router, verification_router
 
 logger = structlog.get_logger()
-
-# Do not import engine globally. Manage it here or in a dedicated state manager.
-engine = create_async_engine(settings.DATABASE_URL, pool_pre_ping=True)
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
@@ -28,6 +26,8 @@ async def lifespan(app: FastAPI):
         async with engine.connect() as conn:
             await conn.execute(text("SELECT 1"))
         logger.info("PostgreSQL connection verified.")
+
+        await init_redis()
     except Exception as e:
         logger.error("Failed to connect to infrastructure on startup", error=str(e))
         raise RuntimeError("Infrastructure connection failed") from e
@@ -35,7 +35,8 @@ async def lifespan(app: FastAPI):
     yield # App runs here
     
     logger.info("Shutting down Veriphy API...")
-    await engine.dispose() # Prevent connection leaks
+    await close_redis()
+    await engine.dispose()
 
 def create_app() -> FastAPI:
     app = FastAPI(
@@ -67,6 +68,9 @@ def create_app() -> FastAPI:
 
     app.add_exception_handler(VeriphyException, _veriphy_exception_handler)
     app.add_exception_handler(Exception, global_exception_handler)
+
+    app.include_router(merchant_router)
+    app.include_router(verification_router)
 
     @app.get("/health", tags=["System"])
     async def health_check():
