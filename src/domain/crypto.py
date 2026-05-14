@@ -36,7 +36,7 @@ class PIICryptoService:
         session = aioboto3.Session()
         async with session.client(   # pyright: ignore[reportGeneralTypeIssues]
             "kms",
-            region_name="eu-west-1"
+            region_name=settings.AWS_REGION
         ) as kms:
             try:
                 response = await kms.generate_data_key(
@@ -73,7 +73,7 @@ class PIICryptoService:
         session = aioboto3.Session()
         async with session.client(   # pyright: ignore[reportGeneralTypeIssues]
             "kms",
-            region_name="eu-west-1"
+            region_name=settings.AWS_REGION
         ) as kms:
             try:
                 # 1. Ask KMS to decrypt the DEK
