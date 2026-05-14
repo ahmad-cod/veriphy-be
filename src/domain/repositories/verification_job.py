@@ -4,7 +4,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from src.domain.models import VerificationJob
-from src.domain.repositories.base import BaseRepository   # Assuming you have this
+from src.domain.repositories.base import BaseRepository
 
 class VerificationJobRepository(BaseRepository[VerificationJob]):
     def __init__(self, session: AsyncSession):
