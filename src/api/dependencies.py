@@ -40,13 +40,36 @@ async def verify_merchant_jwt(authorization: str = Header(...)) -> UUID:
 
 async def verify_play_integrity(token: str):
     """
-    Mocked Google Play Integrity API call.
-    In production, this checks the token against Google servers to ensure
-    the app is untampered, running on an unrooted device, and downloaded from Play Store.
+    Verify Google Play Integrity token to ensure app authenticity and device integrity.
+
+    This checks that:
+    - The app is untampered and downloaded from Google Play Store
+    - The device meets integrity requirements (not rooted, not compromised)
+    - The request is legitimate and not from a malicious source
     """
     if not token or len(token) < 20:
         raise HTTPException(status_code=403, detail="Invalid attestation token")
-    # await google_api.verify(token)
+
+    # Skip verification in local development for easier testing
+    if settings.ENVIRONMENT == "local":
+        logger.info("Skipping Google Play Integrity check in local environment")
+        return
+
+    # Import here to avoid circular imports
+    from src.infrastructure.google_play import GooglePlayIntegrityClient
+
+    try:
+        client = GooglePlayIntegrityClient()
+        result = await client.verify_app_integrity(token)
+
+        if not result.get("verified", False):
+            raise HTTPException(status_code=403, detail="App integrity verification failed")
+
+        logger.info("Google Play Integrity verification passed")
+
+    except Exception as e:
+        logger.error("Google Play Integrity verification failed", error=str(e))
+        raise HTTPException(status_code=403, detail="App integrity verification failed")
 
 async def verify_sms_ingress(
     request: Request,
