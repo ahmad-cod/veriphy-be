@@ -142,6 +142,80 @@ class SquadAPIClient:
         logger.error("Squad API communication failed after all retries")
         raise VeriphyException("Squad API communication failed after retries", status_code=502)
 
+    async def verify_transaction_by_ref(self, transaction_ref: str, retries: int = 3) -> Optional[Dict[str, Any]]:
+        """
+        Verify a transaction by its reference using Squad API.
+
+        Args:
+            transaction_ref: The unique transaction reference
+            retries: Number of retry attempts for network failures
+
+        Returns:
+            Transaction data if verification successful, None otherwise
+
+        Raises:
+            VeriphyException: If API communication fails after all retries
+        """
+        client = self.get_client()
+        url = f"/transaction/verify/{transaction_ref}"
+
+        for attempt in range(retries):
+            try:
+                logger.info(
+                    "Verifying transaction by reference",
+                    transaction_ref=transaction_ref,
+                    attempt=attempt + 1
+                )
+
+                response = await client.get(url)
+                response.raise_for_status()
+                data = response.json()
+
+                if data.get("success") and data.get("status") == 200:
+                    logger.info(
+                        "Transaction verification successful",
+                        transaction_ref=transaction_ref
+                    )
+                    return data.get("data")
+                else:
+                    logger.warning(
+                        "Transaction verification failed",
+                        transaction_ref=transaction_ref,
+                        response_data=data
+                    )
+                    return None
+
+            except httpx.HTTPStatusError as e:
+                if 400 <= e.response.status_code < 500:
+                    logger.error(
+                        "Squad API Client Error in verification",
+                        status=e.response.status_code,
+                        transaction_ref=transaction_ref,
+                        response_body=e.response.text[:500]
+                    )
+                    return None
+                else:
+                    logger.warning(
+                        "Squad API Server Error in verification, retrying...",
+                        status=e.response.status_code,
+                        transaction_ref=transaction_ref,
+                        attempt=attempt + 1
+                    )
+
+            except httpx.RequestError as e:
+                logger.warning(
+                    "Squad API Network Error in verification, retrying...",
+                    error=str(e),
+                    transaction_ref=transaction_ref,
+                    attempt=attempt + 1
+                )
+
+            if attempt < retries - 1:
+                await asyncio.sleep(2 ** attempt)
+
+        logger.error("Squad API verification failed after all retries", transaction_ref=transaction_ref)
+        raise VeriphyException("Squad API verification failed after retries", status_code=502)
+
     async def close(self):
         if self._client and not self._client.is_closed:
             await self._client.aclose()
