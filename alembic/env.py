@@ -74,8 +74,8 @@ async def run_migrations_online():
     
     # Get config and inject your DATABASE_URL
     configuration = config.get_section(config.config_ini_section, {})
-    # Ensure your settings are loaded correctly here
-    # configuration["sqlalchemy.url"] = settings.DATABASE_URL 
+    # Ensure migrations use the same runtime database URL as the application.
+    configuration["sqlalchemy.url"] = settings.DATABASE_URL
 
     connectable = async_engine_from_config(
         configuration,

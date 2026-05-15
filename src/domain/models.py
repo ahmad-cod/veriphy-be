@@ -68,7 +68,15 @@ class Merchant(Base):
     # Squad Integration Data
     squad_account: Mapped[Optional[str]] = mapped_column(String(20), index=True)
     squad_bank_code: Mapped[Optional[str]] = mapped_column(String(10))
-    kyc_status: Mapped[KycStatus] = mapped_column(SQLEnum(KycStatus, name="kyc_status_enum", create_constraint=True), default=KycStatus.PENDING)
+    kyc_status: Mapped[KycStatus] = mapped_column(
+        SQLEnum(
+            KycStatus,
+            name="kyc_status_enum",
+            create_constraint=True,
+            values_callable=lambda enum_cls: [member.value for member in enum_cls],
+        ),
+        default=KycStatus.PENDING,
+    )
     
     # CRITICAL FIX: Server-side timestamps
     created_at: Mapped[datetime] = mapped_column(server_default=func.now())
@@ -98,7 +106,16 @@ class VerificationJob(Base):
     extracted_transaction_ref: Mapped[Optional[str]] = mapped_column(String(100), index=True)
     
     # State Machine
-    state: Mapped[JobState] = mapped_column(SQLEnum(JobState, name="job_state_enum", create_constraint=True), default=JobState.RECEIVED, index=True)
+    state: Mapped[JobState] = mapped_column(
+        SQLEnum(
+            JobState,
+            name="job_state_enum",
+            create_constraint=True,
+            values_callable=lambda enum_cls: [member.value for member in enum_cls],
+        ),
+        default=JobState.RECEIVED,
+        index=True,
+    )
     resolution_reason: Mapped[Optional[str]] = mapped_column(String(100)) 
     squad_txn_ref: Mapped[Optional[str]] = mapped_column(String(100), index=True)
     
@@ -122,7 +139,14 @@ class LedgerTransaction(Base):
     job_id: Mapped[Optional[uuid.UUID]] = mapped_column(ForeignKey("verification_jobs.id"), index=True)
     
     amount: Mapped[Decimal] = mapped_column(Numeric(18, 2))
-    status: Mapped[TransactionStatus] = mapped_column(SQLEnum(TransactionStatus, name="transaction_status_enum", create_constraint=True))
+    status: Mapped[TransactionStatus] = mapped_column(
+        SQLEnum(
+            TransactionStatus,
+            name="transaction_status_enum",
+            create_constraint=True,
+            values_callable=lambda enum_cls: [member.value for member in enum_cls],
+        )
+    )
     settled_at: Mapped[datetime] = mapped_column()
     
     created_at: Mapped[datetime] = mapped_column(server_default=func.now())
@@ -160,7 +184,14 @@ class AuditLog(Base):
     entity_id: Mapped[str] = mapped_column(String(36), index=True)
     
     action: Mapped[str] = mapped_column(String(100))
-    actor_type: Mapped[ActorType] = mapped_column(SQLEnum(ActorType, name="actor_type_enum", create_constraint=True))
+    actor_type: Mapped[ActorType] = mapped_column(
+        SQLEnum(
+            ActorType,
+            name="actor_type_enum",
+            create_constraint=True,
+            values_callable=lambda enum_cls: [member.value for member in enum_cls],
+        )
+    )
     actor_id: Mapped[str] = mapped_column(String(36)) # ID of the system, merchant, or admin
     
     changes: Mapped[dict[str, Any]] = mapped_column(JSONB) 

@@ -1,95 +1,58 @@
-import asyncio
-from uuid import UUID
-from datetime import datetime, timezone
-import hashlib
-
-from sqlalchemy.exc import IntegrityError
-from src.domain.repositories.unit_of_work import UnitOfWork
-from src.domain.crypto import PIICryptoService
-from src.core.exceptions import VeriphyException
-from src.domain.models import JobState
-from src.api.v1.schemas.verification import SMSVerificationPayload, VerificationAcceptedResponse
+from typing import Dict, Optional
+from src.domain.ai.nlp import NLPExtractor
+from src.infrastructure.squad import SquadAPIClient
+from src.api.v1.schemas.verification import SMSVerificationPayload, SMSVerificationResponse
 
 
 class VerificationService:
     def __init__(self):
-        self.crypto = PIICryptoService()
+        self.squad_client = SquadAPIClient()
 
-    async def ingest_sms(
+    async def verify_sms(
         self,
         payload: SMSVerificationPayload,
-        merchant_id: UUID,
         correlation_id: str,
-        uow: UnitOfWork
-    ) -> VerificationAcceptedResponse:
-        """Secure SMS ingestion with idempotency and PII protection."""
+    ) -> SMSVerificationResponse:
+        """Extract financial entities from SMS and verify against Squad without persistence."""
+        extracted = NLPExtractor.extract_financial_entities(payload.sms_body)
+        amount = extracted.get("amount")
+        transaction_ref = extracted.get("transaction_ref")
+        confidence_score = extracted.get("confidence_score", 0.0)
 
-        # 1. Anti-replay hash
-        hash_input = f"{merchant_id}:{payload.sender_id}:{payload.received_at_timestamp}:{payload.sms_body}"
-        sms_hash = hashlib.sha256(hash_input.encode("utf-8")).hexdigest()
+        squad_record = None
+        squad_record_found = False
+        squad_status = None
+        squad_amount_matched: Optional[bool] = None
 
-        async with uow:                                 # Proper UoW usage
-            # Idempotency check
-            existing = await uow.verification_jobs.get_by_sms_hash(sms_hash)
-            if existing:
-                return VerificationAcceptedResponse(
-                    job_id=existing.id,
-                    status="already_exists",
-                    message="Verification already in progress",
-                    queued_at=datetime.now(timezone.utc),
-                    is_new=False
-                )
+        if transaction_ref:
+            squad_record = await self.squad_client.verify_transaction_by_ref(transaction_ref)
+            squad_record_found = squad_record is not None
+            if squad_record_found:
+                squad_status = squad_record.get("status") or squad_record.get("transaction_status")
+                if amount is not None:
+                    try:
+                        squad_amount = float(squad_record.get("transaction_amount", squad_record.get("amount", 0)))
+                        squad_amount_matched = abs(squad_amount - float(amount)) < 0.01
+                    except (TypeError, ValueError):
+                        squad_amount_matched = False
 
-            # 2. Encrypt SMS content (never store plaintext)
-            encryption_context = {"purpose": "verification_job", "merchant_id": str(merchant_id)}
-            encrypted_body = await self.crypto.encrypt_data(
-                payload.sms_body,
-                context=encryption_context
-            )
+        if transaction_ref is None:
+            message = "No transaction reference extracted; Squad lookup skipped."
+        elif squad_record_found:
+            message = "Squad record found and verified." if squad_amount_matched else "Squad record found but amount did not match."
+        else:
+            message = "Transaction reference extracted; no Squad record was found."
 
-            # 3. Create job
-            job_data = {
-                "merchant_id": merchant_id,
-                "sms_content_encrypted": encrypted_body, 
-                "sms_hash": sms_hash,
-                "state": JobState.RECEIVED,
-                "extracted_sender": payload.sender_id,
-            }
-
-            try:
-                new_job = await uow.verification_jobs.create(job_data)
-
-                await uow.session.flush()  # Ensure job ID is generated before commit
-
-                # 4. Audit (implement AuditLogRepository later)
-                # await uow.audit_logs.create({...})
-
-                await uow.commit()
-
-                return VerificationAcceptedResponse(
-                    job_id=new_job.id,
-                    status="accepted",
-                    message="Verification job queued successfully",
-                    queued_at=datetime.now(timezone.utc),
-                    is_new=True
-                )
-            # 4. Handle Race Conditions safely
-            except IntegrityError:
-                await uow.rollback()
-                # If we hit IntegrityError, a concurrent request beat us to it.
-                # Retry lookup in case the other transaction is not yet visible.
-                existing_job = None
-                for attempt in range(5):
-                    existing_job = await uow.verification_jobs.get_by_sms_hash(sms_hash)
-                    if existing_job:
-                        break
-                    await asyncio.sleep(0.05)
-                if not existing_job:
-                    raise VeriphyException("Failed to retrieve existing verification job after race condition")
-                return VerificationAcceptedResponse(
-                    job_id=existing_job.id,
-                    status="already_exists",
-                    message="Verification already in progress",
-                    queued_at=datetime.now(timezone.utc),
-                    is_new=False
-                )
+        return SMSVerificationResponse(
+            merchant_id=payload.merchant_id,
+            sender_id=payload.sender_id,
+            received_at_timestamp=payload.received_at_timestamp,
+            extracted_amount=amount,
+            extracted_transaction_ref=transaction_ref,
+            extraction_confidence=confidence_score,
+            squad_record_found=squad_record_found,
+            squad_status=squad_status,
+            squad_amount_matched=squad_amount_matched,
+            squad_record=squad_record,
+            message=message,
+        )

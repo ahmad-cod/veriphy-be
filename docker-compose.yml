@@ -14,6 +14,8 @@ services:
     volumes:
       - .:/app:delegated
     restart: unless-stopped
+    networks:
+      - veriphy_network
 
   worker:
     build: .
@@ -28,6 +30,8 @@ services:
     volumes:
       - .:/app:delegated
     restart: unless-stopped
+    networks:
+      - veriphy_network
 
   beat:
     build: .
@@ -42,8 +46,11 @@ services:
     volumes:
       - .:/app:delegated
     restart: unless-stopped
+    networks:
+      - veriphy_network
 
   postgres:
+    container_name: postgres
     image: postgres:15-alpine
     restart: unless-stopped
     environment:
@@ -57,6 +64,8 @@ services:
       interval: 10s
       timeout: 5s
       retries: 5
+    networks:
+      - veriphy_network
 
   redis:
     image: redis:7-alpine
@@ -68,7 +77,13 @@ services:
       interval: 10s
       timeout: 5s
       retries: 5
+    networks:
+      - veriphy_network
 
 volumes:
   postgres_data:
   redis_data:
+
+networks:
+  veriphy_network:
+    driver: bridge

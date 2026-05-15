@@ -1,3 +1,4 @@
+from cryptography.fernet import Fernet
 from pydantic_settings import BaseSettings, SettingsConfigDict
 from pydantic import SecretStr, model_validator, field_validator, Field
 from typing import List, Optional
@@ -61,6 +62,13 @@ class Settings(BaseSettings):
                 self.CORS_ORIGINS = ["*"]
             if not self.LOCAL_DEK:
                 raise ValueError("LOCAL_DEK is required in local environment to support deterministic PII encryption.")
+            try:
+                Fernet(self.LOCAL_DEK.get_secret_value().encode())
+            except Exception as exc:
+                raise ValueError(
+                    "LOCAL_DEK must be a 32-byte url-safe base64-encoded Fernet key. "
+                    "Generate one with Fernet.generate_key()."
+                ) from exc
         return self
 
 settings = Settings()

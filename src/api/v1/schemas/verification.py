@@ -1,4 +1,5 @@
 import time
+from typing import Optional, Dict, Any
 from pydantic import BaseModel, Field, ConfigDict, field_validator
 from uuid import UUID
 from datetime import datetime
@@ -24,9 +25,15 @@ class SMSVerificationPayload(BaseModel):
             raise ValueError("SMS timestamp is in the future.")
         return v
 
-class VerificationAcceptedResponse(BaseModel):
-    job_id: UUID
-    status: str = "accepted"
-    message: str = "Verification job queued successfully"
-    queued_at: datetime
-    is_new: bool = Field(..., description="True if newly created, False if idempotent retry")
+class SMSVerificationResponse(BaseModel):
+    merchant_id: UUID
+    sender_id: str
+    received_at_timestamp: int
+    extracted_amount: Optional[float] = None
+    extracted_transaction_ref: Optional[str] = None
+    extraction_confidence: float
+    squad_record_found: bool
+    squad_status: Optional[str] = None
+    squad_amount_matched: Optional[bool] = None
+    squad_record: Optional[Dict[str, Any]] = None
+    message: str = Field(..., description="High-level summary of what happened during verification")

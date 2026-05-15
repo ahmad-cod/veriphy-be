@@ -16,7 +16,15 @@ class PIICryptoService:
             local_dek = settings.LOCAL_DEK
             if local_dek is None:
                 raise RuntimeError("LOCAL_DEK must be configured for local encryption.")
+
             self.local_dek = local_dek.get_secret_value().encode()
+            try:
+                Fernet(self.local_dek)
+            except Exception as exc:
+                raise ValueError(
+                    "LOCAL_DEK must be a 32-byte url-safe base64-encoded Fernet key. "
+                    "Generate one with Fernet.generate_key()."
+                ) from exc
         else:
             self.local_dek = None
 

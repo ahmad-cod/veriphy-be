@@ -1,110 +1,78 @@
 import pytest
-from unittest.mock import AsyncMock, Mock
+from unittest.mock import AsyncMock
 from uuid import UUID
 from datetime import datetime, timezone
-from sqlalchemy.exc import IntegrityError
 
 from src.domain.services.verification_service import VerificationService
 from src.api.v1.schemas.verification import SMSVerificationPayload
 
 
 @pytest.mark.asyncio
-async def test_ingest_sms_returns_existing_job_on_duplicate():
+async def test_verify_sms_returns_squad_record_when_transaction_ref_exists():
     payload = SMSVerificationPayload(
         merchant_id=UUID("123e4567-e89b-12d3-a456-426614174000"),
-        sms_body="Test SMS body content",
+        sms_body="Your payment of NGN 1,200.00 was successful. Transaction ref: SQABC1234.",
         sender_id="Veriphy",
         received_at_timestamp=int(datetime.now(timezone.utc).timestamp()),
         attestation_token="a" * 32,
     )
-    existing_job = Mock(id=UUID("123e4567-e89b-12d3-a456-426614174000"))
-
-    uow = AsyncMock()
-    uow.__aenter__.return_value = uow
-    uow.verification_jobs.get_by_sms_hash.return_value = existing_job
-
     service = VerificationService()
-    response = await service.ingest_sms(payload, UUID("123e4567-e89b-12d3-a456-426614174000"), "corr-id", uow)
+    service.squad_client.verify_transaction_by_ref = AsyncMock(return_value={
+        "transaction_reference": "SQABC1234",
+        "transaction_amount": 1200.0,
+        "status": "success",
+        "created_at": "2026-05-15T11:00:00Z",
+    })
 
-    assert response.is_new is False
-    assert response.job_id == existing_job.id
-    assert response.status == "already_exists"
+    response = await service.verify_sms(payload, "corr-id")
+
+    assert response.squad_record_found is True
+    assert response.extracted_transaction_ref == "SQABC1234"
+    assert response.squad_amount_matched is True
+    assert response.squad_status == "success"
+    assert response.message == "Squad record found and verified."
 
 
 @pytest.mark.asyncio
-async def test_ingest_sms_returns_existing_job_after_integrity_error_race():
+async def test_verify_sms_skips_squad_lookup_without_transaction_ref():
     payload = SMSVerificationPayload(
         merchant_id=UUID("123e4567-e89b-12d3-a456-426614174000"),
-        sms_body="Race condition example",
+        sms_body="Your account was credited with NGN 1500.00.",
         sender_id="Veriphy",
         received_at_timestamp=int(datetime.now(timezone.utc).timestamp()),
         attestation_token="a" * 32,
     )
-    existing_job = Mock(id=UUID("123e4567-e89b-12d3-a456-426614174000"))
-
-    class FakeUoW:
-        def __init__(self):
-            self.verification_jobs = Mock()
-            self.session = Mock()
-            self.session.flush = AsyncMock()
-            self.commit = AsyncMock()
-            self.rollback = AsyncMock()
-            self.verification_jobs.get_by_sms_hash = AsyncMock(side_effect=[None, None, existing_job])
-            self.verification_jobs.create = AsyncMock(side_effect=IntegrityError("stmt", {}, None))
-
-        async def __aenter__(self):
-            return self
-
-        async def __aexit__(self, exc_type, exc_val, exc_tb):
-            return False
-
-    uow = FakeUoW()
-
     service = VerificationService()
-    response = await service.ingest_sms(payload, UUID("123e4567-e89b-12d3-a456-426614174000"), "corr-id", uow)
+    service.squad_client.verify_transaction_by_ref = AsyncMock()
 
-    assert response.is_new is False
-    assert response.job_id == existing_job.id
-    assert response.status == "already_exists"
-    assert uow.rollback.await_count == 1
+    response = await service.verify_sms(payload, "corr-id")
+
+    assert response.squad_record_found is False
+    assert response.extracted_transaction_ref is None
+    assert response.squad_amount_matched is None
+    assert response.message == "No transaction reference extracted; Squad lookup skipped."
+    service.squad_client.verify_transaction_by_ref.assert_not_awaited()
 
 
 @pytest.mark.asyncio
-async def test_ingest_sms_allows_default_received_at_timestamp():
+async def test_verify_sms_handles_squad_record_found_but_amount_mismatch():
     payload = SMSVerificationPayload(
         merchant_id=UUID("123e4567-e89b-12d3-a456-426614174000"),
-        sms_body="Default timestamp test content",
-        sender_id="Veriphy",
-        attestation_token="a" * 32,
-    )
-    service = VerificationService()
-    assert isinstance(payload.received_at_timestamp, int)
-    assert payload.received_at_timestamp > 0
-
-
-@pytest.mark.asyncio
-async def test_ingest_sms_creates_new_job_when_not_duplicate():
-    payload = SMSVerificationPayload(
-        merchant_id=UUID("123e4567-e89b-12d3-a456-426614174000"),
-        sms_body="Another SMS body example",
+        sms_body="Your payment of NGN 1,200.00 was successful. Transaction ref: SQXYZ5678.",
         sender_id="Veriphy",
         received_at_timestamp=int(datetime.now(timezone.utc).timestamp()),
         attestation_token="a" * 32,
     )
-    new_job = Mock(id=UUID("123e4567-e89b-12d3-a456-426614174001"))
-
-    uow = AsyncMock()
-    uow.__aenter__.return_value = uow
-    uow.verification_jobs.get_by_sms_hash.return_value = None
-    uow.verification_jobs.create.return_value = new_job
-    uow.session.flush = AsyncMock()
-    uow.commit = AsyncMock()
-
     service = VerificationService()
-    response = await service.ingest_sms(payload, UUID("123e4567-e89b-12d3-a456-426614174000"), "corr-id", uow)
+    service.squad_client.verify_transaction_by_ref = AsyncMock(return_value={
+        "transaction_reference": "SQXYZ5678",
+        "transaction_amount": 1300.0,
+        "status": "success",
+        "created_at": "2026-05-15T11:00:00Z",
+    })
 
-    assert response.is_new is True
-    assert response.job_id == new_job.id
-    assert response.status == "accepted"
-    uow.verification_jobs.create.assert_awaited_once()
-    uow.commit.assert_awaited_once()
+    response = await service.verify_sms(payload, "corr-id")
+
+    assert response.squad_record_found is True
+    assert response.squad_amount_matched is False
+    assert response.message == "Squad record found but amount did not match."
