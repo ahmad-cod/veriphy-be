@@ -1,3 +1,4 @@
+import asyncio
 from uuid import UUID
 from datetime import datetime, timezone
 import hashlib
@@ -76,12 +77,18 @@ class VerificationService:
             except IntegrityError:
                 await uow.rollback()
                 # If we hit IntegrityError, a concurrent request beat us to it.
-                # Safe to fetch the now-existing job and return it.
-                existing_job = await uow.verification_jobs.get_by_sms_hash(sms_hash)
+                # Retry lookup in case the other transaction is not yet visible.
+                existing_job = None
+                for attempt in range(5):
+                    existing_job = await uow.verification_jobs.get_by_sms_hash(sms_hash)
+                    if existing_job:
+                        break
+                    await asyncio.sleep(0.05)
                 if not existing_job:
                     raise VeriphyException("Failed to retrieve existing verification job after race condition")
                 return VerificationAcceptedResponse(
                     job_id=existing_job.id,
+                    status="already_exists",
                     message="Verification already in progress",
                     queued_at=datetime.now(timezone.utc),
                     is_new=False
