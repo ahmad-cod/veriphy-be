@@ -95,6 +95,7 @@ class VerificationJob(Base):
     # Extracted Entities
     extracted_amount: Mapped[Optional[Decimal]] = mapped_column(Numeric(18, 2))
     extracted_sender: Mapped[Optional[str]] = mapped_column(String(255))
+    extracted_transaction_ref: Mapped[Optional[str]] = mapped_column(String(100), index=True)
     
     # State Machine
     state: Mapped[JobState] = mapped_column(SQLEnum(JobState, name="job_state_enum", create_constraint=True), default=JobState.RECEIVED, index=True)
