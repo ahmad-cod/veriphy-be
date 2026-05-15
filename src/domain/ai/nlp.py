@@ -1,7 +1,7 @@
 import re
 import structlog
 import spacy
-from typing import Dict, Optional
+from typing import Dict, Optional, Any
 
 logger = structlog.get_logger()
 
@@ -25,7 +25,23 @@ class NLPExtractor:
                 cls._model = "REGEX_ONLY"
 
     @staticmethod
-    def extract_financial_entities(sms_body: str) -> Dict[str, Optional[float]]:
+    def _extract_transaction_ref(sms_body: str) -> Optional[str]:
+        ref_patterns = [
+            r'\b(?:transaction[_\s-]?ref|transaction[_\s-]?reference|gateway[_\s-]?transaction[_\s-]?ref|trx[_\s-]?ref|payment[_\s-]?ref|ref(?:erence)?)[:\s]*([A-Za-z0-9-]{8,})\b',
+            r'\b(SQ[A-Za-z0-9]{8,})\b'
+        ]
+
+        for pattern in ref_patterns:
+            match = re.search(pattern, sms_body, re.IGNORECASE)
+            if match:
+                transaction_ref = match.group(1).strip().strip(':,.;')
+                transaction_ref = re.sub(r'[^A-Za-z0-9-]', '', transaction_ref)
+                return transaction_ref.upper()
+
+        return None
+
+    @staticmethod
+    def extract_financial_entities(sms_body: str) -> Dict[str, Optional[Any]]:
         """
         Extract financial entities from SMS text using NLP and regex fallback.
 
@@ -33,13 +49,16 @@ class NLPExtractor:
             sms_body: The SMS message text to analyze
 
         Returns:
-            Dict with 'amount' (float or None) and 'confidence_score' (0.0-1.0)
+            Dict with 'amount' (float or None), 'transaction_ref' (str or None), and 'confidence_score' (0.0-1.0)
         """
         if not sms_body or not isinstance(sms_body, str):
             return {"amount": None, "confidence_score": 0.0}
 
         # Clean and normalize the text
         sms_body = sms_body.strip()
+
+        # Attempt extraction of transaction reference IDs first.
+        transaction_ref = NLPExtractor._extract_transaction_ref(sms_body)
 
         # Method 1: Use spaCy for entity recognition (if model loaded)
         # if NLPExtractor._model and NLPExtractor._model != "REGEX_ONLY":
@@ -59,7 +78,7 @@ class NLPExtractor:
                                 amount=amount,
                                 entity_text=ent.text
                             )
-                            return {"amount": amount, "confidence_score": 0.9}
+                            return {"amount": amount, "transaction_ref": transaction_ref, "confidence_score": 0.9}
 
                 # Look for CARDINAL numbers that might be amounts (fallback)
                 for ent in doc.ents:
@@ -74,7 +93,7 @@ class NLPExtractor:
                                     amount=amount,
                                     entity_text=ent.text
                                 )
-                                return {"amount": amount, "confidence_score": 0.7}
+                                return {"amount": amount, "transaction_ref": transaction_ref, "confidence_score": 0.7}
 
             except Exception as e:
                 logger.warning("NLP processing failed, falling back to regex", error=str(e))
@@ -105,9 +124,9 @@ class NLPExtractor:
                             pattern=pattern,
                             confidence=confidence
                         )
-                        return {"amount": amount, "confidence_score": confidence}
+                        return {"amount": amount, "transaction_ref": transaction_ref, "confidence_score": confidence}
                 except ValueError:
                     continue
 
         logger.info("No amount found in SMS", sms_preview=sms_body[:100])
-        return {"amount": None, "confidence_score": 0.0}
+        return {"amount": None, "transaction_ref": transaction_ref, "confidence_score": 0.0}
