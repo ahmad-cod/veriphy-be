@@ -46,7 +46,6 @@ class VerificationService:
         return SMSVerificationResponse(
             merchant_id=payload.merchant_id,
             sender_id=payload.sender_id,
-            received_at_timestamp=payload.received_at_timestamp,
             extracted_amount=amount,
             extracted_transaction_ref=transaction_ref,
             extraction_confidence=confidence_score,

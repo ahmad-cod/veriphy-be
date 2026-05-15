@@ -13,7 +13,6 @@ async def test_verify_sms_returns_squad_record_when_transaction_ref_exists():
         merchant_id=UUID("123e4567-e89b-12d3-a456-426614174000"),
         sms_body="Your payment of NGN 1,200.00 was successful. Transaction ref: SQABC1234.",
         sender_id="Veriphy",
-        received_at_timestamp=int(datetime.now(timezone.utc).timestamp()),
         attestation_token="a" * 32,
     )
     service = VerificationService()
@@ -39,7 +38,6 @@ async def test_verify_sms_skips_squad_lookup_without_transaction_ref():
         merchant_id=UUID("123e4567-e89b-12d3-a456-426614174000"),
         sms_body="Your account was credited with NGN 1500.00.",
         sender_id="Veriphy",
-        received_at_timestamp=int(datetime.now(timezone.utc).timestamp()),
         attestation_token="a" * 32,
     )
     service = VerificationService()
@@ -60,7 +58,6 @@ async def test_verify_sms_handles_squad_record_found_but_amount_mismatch():
         merchant_id=UUID("123e4567-e89b-12d3-a456-426614174000"),
         sms_body="Your payment of NGN 1,200.00 was successful. Transaction ref: SQXYZ5678.",
         sender_id="Veriphy",
-        received_at_timestamp=int(datetime.now(timezone.utc).timestamp()),
         attestation_token="a" * 32,
     )
     service = VerificationService()
