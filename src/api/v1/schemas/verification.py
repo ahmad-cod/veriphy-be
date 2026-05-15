@@ -6,9 +6,10 @@ from datetime import datetime
 class SMSVerificationPayload(BaseModel):
     model_config = ConfigDict(extra='forbid')
     
+    merchant_id: UUID
     sms_body: str = Field(..., min_length=10, max_length=1000)
     sender_id: str = Field(..., min_length=2, max_length=50)
-    received_at_timestamp: int = Field(...)
+    received_at_timestamp: int = Field(default_factory=lambda: int(time.time()))
     
     # Security Attestation
     attestation_token: str = Field(..., min_length=20)
