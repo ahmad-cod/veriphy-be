@@ -133,6 +133,7 @@ SQUAD_SECRET_KEY="your_squad_api_key_here"
 ```
 
 **Important Security Notes:**
+
 - Generate secure random strings for `JWT_SECRET_KEY` and `BVN_HASH_PEPPER`
 - Use different values for development, staging, and production
 - Never commit real secrets to version control
@@ -152,6 +153,7 @@ GRANT ALL PRIVILEGES ON DATABASE veriphy TO veriphy_user;
 ```
 
 Update your `.env` file with the correct database URL:
+
 ```env
 DATABASE_URL="postgresql+asyncpg://veriphy_user:your_secure_password@localhost:5432/veriphy"
 ```
@@ -172,6 +174,42 @@ uvicorn src.main:app --reload --host 0.0.0.0 --port 8000
 
 The API will be available at: http://localhost:8000
 
+## 🐳 Docker
+
+This project includes Docker support for local development.
+
+1. Copy the example environment file:
+
+```bash
+cp .env.example .env
+```
+
+2. Build and start the stack:
+
+```bash
+docker compose up --build
+```
+
+3. Run database migrations once the database is ready:
+
+```bash
+docker compose run --rm web alembic upgrade head
+```
+
+4. Open the API in your browser:
+
+```bash
+http://localhost:8000
+```
+
+> If you want to stop the local stack:
+>
+> ```bash
+> docker compose down
+> ```
+
+````
+
 ## 🧪 Testing
 
 ### Run Unit Tests
@@ -185,7 +223,7 @@ pytest tests/ --cov=src --cov-report=html
 
 # Run specific test file
 pytest tests/test_crypto.py -v
-```
+````
 
 ### API Testing
 
@@ -237,11 +275,13 @@ veriphy-be/
 ### Adding New Features
 
 1. **Create a feature branch**:
+
    ```bash
    git checkout -b feature/your-feature-name
    ```
 
 2. **Write tests first** (TDD approach):
+
    ```bash
    # Add tests in tests/ directory
    pytest tests/ -v
@@ -250,6 +290,7 @@ veriphy-be/
 3. **Implement the feature** following Clean Architecture principles
 
 4. **Run full test suite**:
+
    ```bash
    pytest tests/ --cov=src
    ```
@@ -336,6 +377,7 @@ CMD ["uvicorn", "src.main:app", "--host", "0.0.0.0", "--port", "8000"]
 ## 📝 API Documentation
 
 Once the server is running, visit:
+
 - **Swagger UI**: http://localhost:8000/docs
 - **ReDoc**: http://localhost:8000/redoc
 - **OpenAPI Schema**: http://localhost:8000/openapi.json
@@ -345,12 +387,14 @@ Once the server is running, visit:
 ### Common Issues
 
 **"ModuleNotFoundError: No module named 'src'"**
+
 ```bash
 # Set Python path
 export PYTHONPATH=.
 ```
 
 **"Connection refused" for PostgreSQL/Redis**
+
 ```bash
 # Check if services are running
 sudo systemctl status postgresql
@@ -362,6 +406,7 @@ sudo systemctl start redis-server
 ```
 
 **"Permission denied" for database**
+
 ```bash
 # Connect as postgres user and grant permissions
 sudo -u postgres psql
@@ -369,6 +414,7 @@ GRANT ALL PRIVILEGES ON DATABASE veriphy TO veriphy_user;
 ```
 
 **Tests failing with import errors**
+
 ```bash
 # Run tests with proper path
 PYTHONPATH=. pytest tests/ -v
@@ -381,6 +427,7 @@ This project is licensed under the MIT License - see the LICENSE file for detail
 ## 📞 Support
 
 For questions or support:
+
 - Create an issue on GitHub
 - Check the troubleshooting section above
 - Review the API documentation
