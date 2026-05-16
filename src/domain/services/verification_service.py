@@ -1,3 +1,4 @@
+from decimal import Decimal
 from typing import Dict, Optional
 from src.domain.ai.nlp import NLPExtractor
 from src.infrastructure.squad import SquadAPIClient
@@ -15,7 +16,7 @@ class VerificationService:
     ) -> SMSVerificationResponse:
         """Extract financial entities from SMS and verify against Squad without persistence."""
         extracted = NLPExtractor.extract_financial_entities(payload.sms_body)
-        amount = extracted.get("amount")
+        amount = Decimal(str(extracted.get("amount", None))) * 100 if extracted.get("amount") is not None else None  # Convert to kobo / cents if amount is present
         transaction_ref = extracted.get("transaction_ref")
         confidence_score = extracted.get("confidence_score", 0.0)
 
